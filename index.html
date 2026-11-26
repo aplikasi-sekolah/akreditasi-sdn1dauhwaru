@@ -29,10 +29,12 @@ h3.kom{margin:28px 0 4px;color:var(--pri)}h4.but{margin:16px 0 6px}
 details.ik{background:#fff;border:1px solid var(--line);border-radius:10px;margin:8px 0}details.ik summary{cursor:pointer;padding:10px 12px}details.ik .ib{padding:0 14px 12px}
 .chip{float:right;font-size:.8rem;padding:2px 8px;border-radius:99px;border:1px solid var(--line);margin-left:8px}.chip.g{border-color:var(--ok);color:var(--ok)}.chip.y{border-color:#b7791f;color:#b7791f}
 @media(prefers-color-scheme:dark){details.ik{background:#18202e}}
+.topbar{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:5px 20px;background:#141f66;color:#fff;font-size:.82rem}.topbar button{margin:0;padding:3px 10px;font-size:.8rem;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.6);border-radius:6px}.topbar button:hover{background:rgba(255,255,255,.15)}
 @media(max-width:760px){.split{grid-template-columns:1fr}.info{padding:28px}}
 @media(prefers-color-scheme:dark){:root{--pri:#5a73e6;--bg:#10151f;--side:#1d2a3a;--ink:#e8edf5;--line:#2e3b50;--mut:#9aa7bd}
 input,select,textarea,table,.it,.sc,.box{background:#18202e;color:var(--ink)}header nav button.on,button.alt{background:#18202e}}
 </style></head><body>
+<div class="topbar"><span>Hak Cipta © I Wayan Abriana Karya, S.Pd</span><button id="fs" type="button" title="Mode layar penuh">⛶ Layar Penuh</button></div>
 <div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
@@ -119,8 +121,8 @@ async function dia(){
 async function dok(t){
   const{data}=await db.from("dokumen").select("*").order("created_at",{ascending:false});
   const ad=me.role==="admin",up=me.role!=="asesor";
-  t.innerHTML=`${up?'<div class="row"><input type="file" id="fl"><button id="up" style="margin:0">Unggah</button></div><p id="msg" class="mut">Maksimal 10 MB. Berkas baru menunggu persetujuan admin.</p>':'<p class="mut">Hanya berkas yang sudah disetujui admin yang tampil.</p>'}
-  <div class="tw"><table><tr><th>Berkas</th><th>Pengunggah</th><th>Tanggal</th><th>Status</th><th></th></tr>${(data||[]).map(d=>`<tr><td>${esc(d.nama)}<div class="mut">${kodeDari(d.path)?"Indikator "+kodeDari(d.path):"Umum"}</div></td><td>${esc(d.uploader_nama)}</td>
+  t.innerHTML=`${up?'<select id="kd" style="margin-bottom:8px"><option value="">Umum (tidak terkait indikator)</option>${IND.map(i=>`<option value="${i[0]}">${i[0]} ${esc(i[1].slice(0,70))}</option>`).join("")}</select><div class="row"><input type="file" id="fl"><button id="up" style="margin:0">Unggah</button></div><p id="msg" class="mut">Maksimal 10 MB. Berkas baru menunggu persetujuan admin.</p>':'<p class="mut">Hanya berkas yang sudah disetujui admin yang tampil.</p>'}
+  <div class="tw"><table><tr><th>Berkas</th><th>Pengunggah</th><th>Tanggal</th><th>Status</th><th></th></tr>${(data||[]).map(d=>`<tr><td>${esc(d.nama)}<div class="mut">${kodeDari(d.path)?"Indikator "+kodeDari(d.path):"Umum"}</div>${!kodeDari(d.path)&&(ad||d.uploader_id===me.id)?`<select class="tk" data-id="${d.id}" data-p="${esc(d.path)}" style="margin-top:6px"><option value="">Tautkan ke indikator…</option>${IND.map(i=>`<option value="${i[0]}">${i[0]} ${esc(i[1].slice(0,60))}</option>`).join("")}</select>`:""}</td><td>${esc(d.uploader_nama)}</td>
   <td>${new Date(d.created_at).toLocaleDateString("id-ID")}</td><td>${ST[d.status]}${d.catatan_admin?`<div class="mut">${esc(d.catatan_admin)}</div>`:""}</td>
   <td class="ac"><button class="alt" data-u="${esc(d.path)}">Unduh</button>
   ${ad&&d.status!=="disetujui"?`<button class="alt" data-a="${d.id}">Setujui</button>`:""}
@@ -128,13 +130,20 @@ async function dok(t){
   ${ad||(d.uploader_id===me.id&&d.status!=="disetujui")?`<button class="alt" data-d="${d.id}" data-p="${esc(d.path)}">Hapus</button>`:""}</td></tr>`).join("")||'<tr><td colspan="5">Belum ada dokumen.</td></tr>'}</table></div>`;
   t.querySelectorAll("[data-u]").forEach(b=>b.onclick=async()=>{const{data}=await db.storage.from("dokumen").createSignedUrl(b.dataset.u,60);if(data)window.open(data.signedUrl)});
   const rv=async(id,status,c)=>{const{error}=await db.from("dokumen").update({status,catatan_admin:c,reviewed_by:me.id,reviewed_at:new Date().toISOString()}).eq("id",id);if(error)alert(error.message);dok(t)};
+  t.querySelectorAll("select.tk").forEach(x=>x.onchange=async()=>{
+    if(!x.value)return;const np=`sekolah/${x.value}/${x.dataset.p.split("/").pop()}`;
+    const mv=await db.storage.from("dokumen").move(x.dataset.p,np);
+    if(mv.error){alert("Gagal menautkan: "+mv.error.message+"\nSolusi: unggah ulang berkas ini lewat menu Dokumen Wajib, lalu hapus yang lama.");return dok(t)}
+    const{error}=await db.from("dokumen").update({path:np}).eq("id",x.dataset.id);
+    if(error){await db.storage.from("dokumen").move(np,x.dataset.p);alert(error.message)}
+    dok(t)});
   t.querySelectorAll("[data-a]").forEach(b=>b.onclick=()=>rv(b.dataset.a,"disetujui",null));
   t.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>{const c=prompt("Alasan penolakan (boleh dikosongkan):");if(c!==null)rv(b.dataset.r,"ditolak",c)});
   t.querySelectorAll("[data-d]").forEach(b=>b.onclick=async()=>{if(!confirm("Hapus dokumen ini?"))return;
     await db.storage.from("dokumen").remove([b.dataset.p]);const{error}=await db.from("dokumen").delete().eq("id",b.dataset.d);if(error)alert(error.message);dok(t)});
   if(up)t.querySelector("#up").onclick=async()=>{
     const f=t.querySelector("#fl").files[0];if(!f)return msg("Pilih berkas dulu.");if(f.size>10e6)return msg("Ukuran melebihi 10 MB.");
-    const p=`sekolah/${Date.now()}_${f.name.replace(/[^\w.\-]/g,"_")}`;msg("Mengunggah…",1);
+    const p=`sekolah/${t.querySelector("#kd").value?t.querySelector("#kd").value+"/":""}${Date.now()}_${f.name.replace(/[^\w.\-]/g,"_")}`;msg("Mengunggah…",1);
     const u=await db.storage.from("dokumen").upload(p,f);if(u.error)return msg(u.error.message);
     const{error}=await db.from("dokumen").insert({nama:f.name,path:p,uploader_id:me.id,uploader_nama:me.nama});
     if(error)return msg(error.message);dok(t)};
@@ -219,6 +228,13 @@ async function wajib(){
     const{error}=await db.from("dokumen").insert({nama:f.name,path:p,uploader_id:me.id,uploader_nama:me.nama});
     if(error)return msg(error.message);wajib()});
 }
+
+/* ---------- MODE LAYAR PENUH ---------- */
+(()=>{const b=document.getElementById("fs"),el=document.documentElement;
+  if(!el.requestFullscreen){b.style.display="none";return}
+  const lbl=()=>b.textContent=document.fullscreenElement?"✕ Keluar Layar Penuh":"⛶ Layar Penuh";
+  b.onclick=()=>document.fullscreenElement?document.exitFullscreen():el.requestFullscreen().catch(()=>{});
+  document.addEventListener("fullscreenchange",lbl);lbl()})();
 
 init();
 </script></body></html>
